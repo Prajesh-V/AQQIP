@@ -1,0 +1,219 @@
+{
+  "manifest_name": "AQQIP_PRE_TRAINING_INTEGRITY_MANIFEST_PHASE_1C",
+  "created_at_utc": "2026-10-21T13:58:00Z",
+  "phase": "1C - Bootstrap Edge-Case Correction and Pre-Training Integrity Freeze",
+  "governing_specification": {
+    "name": "aqqip_volatility_spec_v4_7.md",
+    "path": "C:\\Users\\prajesh\\.gemini\\antigravity-ide\\brain\\6cd62b1a-81e0-4795-a91a-7069a3fa5900\\aqqip_volatility_spec_v4_7.md",
+    "size_bytes": 51024,
+    "sha256": "eabd5e448d038dd26ce5168c4c1bb652d97980e508da53805710d5cfd0d69ec1",
+    "status": "FROZEN_UNCHANGED"
+  },
+  "environment": {
+    "python": "3.14.6",
+    "platform": "win32 (AMD64)",
+    "packages": {
+      "lightgbm": "4.7.0",
+      "pandas": "3.0.6",
+      "numpy": "2.4.6",
+      "scikit-learn": "1.9.1",
+      "mlflow": "3.17.1",
+      "pytest": "9.1.1"
+    }
+  },
+  "experiment_protocol_configuration": {
+    "prediction_horizon_h": 20,
+    "hazard_alpha": 0.10,
+    "candidate_schemas": {
+      "Candidate_A": 11,
+      "Candidate_B": 12,
+      "Candidate_C": 11,
+      "Candidate_D": 12
+    },
+    "fold_schedule": {
+      "folds": [1, 2, 3, 4],
+      "evaluation_years": [2021, 2022, 2023, 2024],
+      "retained_dates": 925,
+      "universe_size_per_date": 32,
+      "retained_eval_observations": 29600,
+      "terminal_trim_per_fold": 20
+    },
+    "training_and_selection_policy": {
+      "max_boosting_rounds": 300,
+      "early_stopping_patience": 25,
+      "selection_metric": "binary_logloss",
+      "outer_refit_mode": "exact_iteration_independent_reconstruction"
+    },
+    "ranking_and_alert_policy": {
+      "ranking_keys": ["-predicted_probability", "ticker_ascending"],
+      "fraction": 0.05,
+      "daily_budget_k_t": 2
+    },
+    "bootstrap_inference_configuration": {
+      "comparison": "Candidate C vs. Baseline A (paired)",
+      "block_length_L": 20,
+      "n_replicates_B": 1000,
+      "random_seed": 20240101,
+      "resampling_mode": "within-fold moving block with deterministic rejection resampling",
+      "rejection_policy": "Reject and redraw if recall denominator == 0 or alert denominator == 0",
+      "max_retries": 10000,
+      "replicate_conversions": "delta_pp = delta_prop * 100.0"
+    },
+    "decision_matrix_thresholds": {
+      "primary_effect_hurdle_pp": -4.0,
+      "ci_upper_bound_pp": 0.0,
+      "recall_ni_lower_bound_pp": -1.0,
+      "mechanistic_attribution_min_pct": 60.0
+    }
+  },
+  "file_integrity_records": [
+    {
+      "name": "aqqip_volatility_spec_v4_7.md",
+      "path": "C:\\Users\\prajesh\\.gemini\\antigravity-ide\\brain\\6cd62b1a-81e0-4795-a91a-7069a3fa5900\\aqqip_volatility_spec_v4_7.md",
+      "size_bytes": 51024,
+      "last_modified_utc": "2026-10-21T12:54:15.043273+00:00",
+      "sha256": "eabd5e448d038dd26ce5168c4c1bb652d97980e508da53805710d5cfd0d69ec1",
+      "role": "Frozen Research Contract (Unchanged)"
+    },
+    {
+      "name": "asymmetric_volatility_experiment.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\asymmetric_volatility_experiment.py",
+      "size_bytes": 34394,
+      "last_modified_utc": "2026-10-21T13:54:41.471008+00:00",
+      "sha256": "e9bd54a5f3395b5b4d9e301766bc0d701cd10f9a358388fcde25c45f4c32d9bf",
+      "role": "Canonical Experiment Module (Phase 1C Corrected)"
+    },
+    {
+      "name": "asymmetric_volatility_experiment.py.bak_phase1b",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\asymmetric_volatility_experiment.py.bak_phase1b",
+      "size_bytes": 32074,
+      "last_modified_utc": "2026-10-21T13:06:08.049824+00:00",
+      "sha256": "53daea32cd2466a7689a187bf1d83a1e92c0a8c51607f2e43a669134a27001ed",
+      "role": "Phase 1B Canonical Module Backup"
+    },
+    {
+      "name": "audit_asymmetric_volatility_protocol.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\audit_asymmetric_volatility_protocol.py",
+      "size_bytes": 9951,
+      "last_modified_utc": "2026-10-21T13:57:07.984782+00:00",
+      "sha256": "d1c2d3d4868b26628edfc27ed2d12c9c35f774491089192a3b50830613742014",
+      "role": "Pre-Execution Gate Audit Runner (Phase 1C Updated)"
+    },
+    {
+      "name": "audit_asymmetric_volatility_protocol.py.bak_phase1b",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\audit_asymmetric_volatility_protocol.py.bak_phase1b",
+      "size_bytes": 9264,
+      "last_modified_utc": "2026-10-21T13:08:31.421042+00:00",
+      "sha256": "1091cadf4f4507524cfb8b4ca56f572f90987e76761dc4b0663641b49abd4bec",
+      "role": "Phase 1B Audit Runner Backup"
+    },
+    {
+      "name": "test_asymmetric_volatility_experiment.py",
+      "path": "C:\\dev\\AQQIP\\tests\\test_asymmetric_volatility_experiment.py",
+      "size_bytes": 30193,
+      "last_modified_utc": "2026-10-21T13:56:18.414324+00:00",
+      "sha256": "28f74c9d620ae760fe95634400a9fea09e89bdfa7b316eb2a6a7528353bfa5cd",
+      "role": "Automated Unit Test Suite (18 Tests, Phase 1C Updated)"
+    },
+    {
+      "name": "test_asymmetric_volatility_experiment.py.bak_phase1b",
+      "path": "C:\\dev\\AQQIP\\tests\\test_asymmetric_volatility_experiment.py.bak_phase1b",
+      "size_bytes": 23369,
+      "last_modified_utc": "2026-10-21T13:07:18.805936+00:00",
+      "sha256": "b94b8d70b8c2d49ec4d561b36caa8699e76a663c6d61fd9c5f75430a0a1611f7",
+      "role": "Phase 1B Test Suite Backup (13 Tests)"
+    },
+    {
+      "name": "target_builder.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\target_builder.py",
+      "size_bytes": 3065,
+      "last_modified_utc": "2026-10-20T17:49:13.829809+00:00",
+      "sha256": "34c37a08e7b031f688db88fa534fdea237a56bd7e7b14090f88dd9df3e7f4907",
+      "role": "Production Target Builder"
+    },
+    {
+      "name": "feature_builder.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\feature_builder.py",
+      "size_bytes": 4217,
+      "last_modified_utc": "2026-10-20T19:36:06.271938+00:00",
+      "sha256": "f229192dd854db0b8edcd5889540f42a52b06423635289b06b1cdae3b053e974",
+      "role": "Production Feature Builder"
+    },
+    {
+      "name": "rolling_origin_evaluator.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\rolling_origin_evaluator.py",
+      "size_bytes": 15128,
+      "last_modified_utc": "2026-10-20T19:34:37.599174+00:00",
+      "sha256": "c77322c1e266477f3c8b79f952a7aba2eb35af7fb204d2e8e995891e2859d257",
+      "role": "Rolling Origin Evaluator Module"
+    },
+    {
+      "name": "train_pipeline.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\train_pipeline.py",
+      "size_bytes": 14187,
+      "last_modified_utc": "2026-10-20T18:54:11.570576+00:00",
+      "sha256": "b306c6caea658301d446dc8efa6b22052c9c160ff57c48343cd43dbd3f011728",
+      "role": "Baseline Training Pipeline"
+    },
+    {
+      "name": "train_regularized_candidate.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\train_regularized_candidate.py",
+      "size_bytes": 8027,
+      "last_modified_utc": "2026-10-20T19:36:46.320330+00:00",
+      "sha256": "ba9a268dfc6c48320c9965e09189e763afc1eccd2815fc9c51434fd218223e6b",
+      "role": "Regularized Candidate Training Entry Point"
+    },
+    {
+      "name": "historical_dataset_builder.py",
+      "path": "C:\\dev\\AQQIP\\src\\quant\\historical_dataset_builder.py",
+      "size_bytes": 5479,
+      "last_modified_utc": "2026-10-20T19:36:15.364066+00:00",
+      "sha256": "6db31e156c8b1d6fe17867988e56448097a6e3225af3584d4fac246f674e8ee2",
+      "role": "Historical Dataset Builder"
+    },
+    {
+      "name": "meta.yaml",
+      "path": "C:\\dev\\AQQIP\\mlruns\\125769975230458810\\62d5c881d4bb4922b3d93ccaad9b5438\\meta.yaml",
+      "size_bytes": 398,
+      "last_modified_utc": "2026-10-20T19:37:26.141474+00:00",
+      "sha256": "d75685c702780f5e35ed1a49ee0836232ab06312db56266cd1293ed1220d4fae",
+      "role": "Frozen Baseline Model Metadata (Run 62d5c881d4bb4922b3d93ccaad9b5438)"
+    }
+  ],
+  "authoritative_eval_artifacts_evidence": [
+    {
+      "name": "authoritative_eval_predictions_2025_2026.parquet",
+      "path": "C:\\dev\\AQQIP\\eval_artifacts\\authoritative_eval_predictions_2025_2026.parquet",
+      "size_bytes": 345295,
+      "last_modified_utc": "2026-10-20T20:02:18.115811+00:00",
+      "sha256": "2aecb8abfb7811faf25b807003cd53e3969bb6602f3c37ed65d896bcf8c8a3a1",
+      "status": "UNTOUCHED_PRESERVED"
+    },
+    {
+      "name": "authoritative_eval_predictions_2025_2026.csv",
+      "path": "C:\\dev\\AQQIP\\eval_artifacts\\authoritative_eval_predictions_2025_2026.csv",
+      "size_bytes": 5247120,
+      "last_modified_utc": "2026-10-20T20:02:18.062105+00:00",
+      "sha256": "020c093a0a92d9339054a4c6a1422ea8c4a68e0e1ab33bc105df03845a9f1acc",
+      "status": "UNTOUCHED_PRESERVED"
+    }
+  ],
+  "verification_commands": [
+    {
+      "command": "pytest -v tests/test_asymmetric_volatility_experiment.py",
+      "exit_code": 0,
+      "summary": "18 passed in 5.33s"
+    },
+    {
+      "command": "python src/quant/audit_asymmetric_volatility_protocol.py",
+      "exit_code": 0,
+      "summary": "Fixtures 1-4 PASS, Gates G1-G7 PASS"
+    },
+    {
+      "command": "pytest -v tests/test_feature_builder.py tests/test_target_builder.py",
+      "exit_code": 0,
+      "summary": "3 passed in 0.73s"
+    }
+  ],
+  "state_freeze_statement": "This manifest freezes the current codebase and configuration state for subsequent work. It establishes cryptographically verifiable integrity baselines as of 2026-10-21T13:58:00Z. It does not establish historical file contents that were never previously hashed. No database mutations, MLflow run alterations, model fittings, or authoritative prediction overwrites occurred."
+}

@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+LABEL project="aqqip" \
+      description="AQQIP Python service base image"
+
+# System deps for MySQL client, building wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    default-libmysqlclient-dev \
+    pkg-config \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Download NLTK data needed for sentence tokenization
+RUN python -c "import nltk; nltk.download('punkt_tab', quiet=True); nltk.download('averaged_perceptron_tagger', quiet=True)"
+
+# Copy source
+COPY . .
+
+# Default command (overridden per service in docker-compose)
+CMD ["python", "-m", "src"]

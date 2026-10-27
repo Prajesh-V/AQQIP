@@ -1,0 +1,204 @@
+"""
+AQQIP Asymmetric Volatility Protocol — Pre-Execution Gate Audit
+
+Executes read-only panel audits for Gates G1 through G7 using the canonical
+experiment implementation in src.quant.asymmetric_volatility_experiment:
+- G1: Panel balance (32 tickers across 925 retained eval dates).
+- G2: Candidate feature validity (exact prescribed columns, ordering, completeness, and finiteness).
+- G3: Target availability (forward_return_pct non-NaN, finite, valid 20-session endpoint).
+- G4: Strict shared universe across Candidates A, B, C, and D.
+- G5: Row-count and fold reconciliation (observed counts vs expected counts).
+- G6: Missingness contract (expected warm-up NaNs vs unexpected missingness/infs).
+- G7: Warm-up containment invariant (feature-incomplete rows strictly in training).
+- Additional candidate-specific fixture verification (DSV, USV, DAR hand-worked fixtures).
+"""
+from __future__ import annotations
+
+import sys
+import os
+from pathlib import Path
+
+# Ensure project root is on sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import numpy as np
+import pandas as pd
+
+from src.database.mysql_client import get_mysql_connection
+from src.quant.asymmetric_volatility_experiment import (
+    CANDIDATE_A_FEATURES,
+    CANDIDATE_B_FEATURES,
+    CANDIDATE_C_FEATURES,
+    CANDIDATE_D_FEATURES,
+    CANDIDATE_SCHEMAS,
+    FOLD_DEFINITIONS,
+    compute_asymmetric_volatility_features,
+    build_candidate_panel,
+    split_experiment_fold,
+    validate_gate_g1,
+    validate_gate_g2,
+    validate_gate_g3,
+    validate_gate_g4,
+    validate_gate_g5,
+    validate_gate_g6,
+    validate_gate_g7,
+)
+
+
+def run_candidate_fixture_verification() -> bool:
+    """Verifies DSV, USV, DAR against hand-calculated analytical sequences."""
+    print("\n--- Additional Candidate-Specific Verification (Hand-Calculated Fixtures) ---")
+    
+    # Fixture 1: 10 days of -0.02 followed by 10 days of +0.02
+    r1 = [-0.02] * 10 + [0.02] * 10
+    df1 = pd.DataFrame({"ticker": ["FIXTURE"] * 20, "trade_date": range(20), "return_1d": r1})
+    res1 = compute_asymmetric_volatility_features(df1).iloc[-1]
+    
+    exp_dsv = np.sqrt(0.0002)
+    exp_usv = np.sqrt(0.0002)
+    exp_dar = exp_dsv / (exp_usv + 1e-4)
+    
+    pass1 = (
+        np.isclose(res1["DSV_20"], exp_dsv, rtol=1e-7)
+        and np.isclose(res1["USV_20"], exp_usv, rtol=1e-7)
+        and np.isclose(res1["DAR_20"], exp_dar, rtol=1e-7)
+    )
+    print(f"Fixture 1 (Balanced +/-2% returns): {'PASS' if pass1 else 'FAIL'} [DSV={res1['DSV_20']:.8f}, USV={res1['USV_20']:.8f}, DAR={res1['DAR_20']:.8f}]")
+    
+    # Fixture 2: Flat returns (r = 0 everywhere)
+    r2 = [0.0] * 20
+    df2 = pd.DataFrame({"ticker": ["FIXTURE"] * 20, "trade_date": range(20), "return_1d": r2})
+    res2 = compute_asymmetric_volatility_features(df2).iloc[-1]
+    pass2 = (
+        np.isclose(res2["DSV_20"], 0.0)
+        and np.isclose(res2["USV_20"], 0.0)
+        and np.isclose(res2["DAR_20"], 0.0)
+        and not np.isnan(res2["DAR_20"])
+        and not np.isinf(res2["DAR_20"])
+    )
+    print(f"Fixture 2 (Flat 0% returns, denominator floor test): {'PASS' if pass2 else 'FAIL'} [DSV={res2['DSV_20']:.8f}, USV={res2['USV_20']:.8f}, DAR={res2['DAR_20']:.8f}]")
+    
+    # Fixture 3: All negative returns (r = -0.01 everywhere)
+    r3 = [-0.01] * 20
+    df3 = pd.DataFrame({"ticker": ["FIXTURE"] * 20, "trade_date": range(20), "return_1d": r3})
+    res3 = compute_asymmetric_volatility_features(df3).iloc[-1]
+    pass3 = (
+        np.isclose(res3["DSV_20"], 0.01)
+        and np.isclose(res3["USV_20"], 0.0)
+        and np.isclose(res3["DAR_20"], 0.01 / 1e-4)  # 100.0
+        and not np.isinf(res3["DAR_20"])
+    )
+    print(f"Fixture 3 (All -1% returns, zero-upside boundary test): {'PASS' if pass3 else 'FAIL'} [DSV={res3['DSV_20']:.8f}, USV={res3['USV_20']:.8f}, DAR={res3['DAR_20']:.8f}]")
+
+    return pass1 and pass2 and pass3
+
+
+def run_full_protocol_audit() -> bool:
+    print("================================================================================")
+    print("AQQIP ASYMMETRIC VOLATILITY EXPERIMENT: CANONICAL PRE-EXECUTION AUDIT (v4.7)")
+    print("================================================================================")
+
+    # 1. Additional candidate fixture verification
+    fixtures_ok = run_candidate_fixture_verification()
+    if not fixtures_ok:
+        print("[FAIL] Candidate-specific fixture verification failed.")
+        return False
+
+    # 2. Load raw price data (Read-Only)
+    print("\n[Step 1] Loading historical OHLCV price panel from MySQL (2014-01-02 to 2024-12-31)...")
+    with get_mysql_connection() as conn:
+        df_raw = pd.read_sql(
+            """
+            SELECT ticker, trade_date, open, high, low, close, volume, adj_close
+            FROM ohlcv_prices
+            WHERE trade_date >= '2014-01-02' AND trade_date <= '2024-12-31'
+            ORDER BY ticker, trade_date ASC
+            """,
+            conn
+        )
+    print(f"Loaded {len(df_raw)} records across {df_raw['ticker'].nunique()} tickers and {df_raw['trade_date'].nunique()} trading sessions.")
+
+    # 3. Construct canonical candidate panel using canonical module
+    print("\n[Step 2] Building canonical candidate panel via build_candidate_panel()...")
+    panel = build_candidate_panel(df_raw)
+    print(f"Constructed panel with {len(panel)} rows and {len(panel.columns)} columns.")
+
+    # Extract retained evaluation panel (sessions from all 4 folds)
+    eval_sessions = []
+    for f in FOLD_DEFINITIONS:
+        s_start, s_end = f["eval_retained"]
+        eval_sessions.extend(range(s_start, s_end + 1))
+    eval_panel = panel[panel["session"].isin(eval_sessions)].copy()
+
+    # 4. Execute Gates G1 through G7
+    gate_results = {}
+
+    print("\n--- Auditing Gate G1: Panel Balance ---")
+    pass_g1, msg_g1 = validate_gate_g1(eval_panel)
+    gate_results["G1"] = (pass_g1, msg_g1)
+    print(f"[{'PASS' if pass_g1 else 'FAIL'}] G1: {msg_g1}")
+
+    print("\n--- Auditing Gate G2: Candidate Feature Validity (A, B, C, D) ---")
+    # Verify column schemas and ordering
+    schema_ok = True
+    for c_name, feats in CANDIDATE_SCHEMAS.items():
+        missing = [f for f in feats if f not in eval_panel.columns]
+        if missing:
+            schema_ok = False
+            print(f"Candidate {c_name} missing columns: {missing}")
+    if schema_ok:
+        print("Candidate column schemas confirmed: A (11 cols), B (12 cols), C (11 cols), D (12 cols).")
+    pass_g2, msg_g2 = validate_gate_g2(eval_panel)
+    gate_results["G2"] = (pass_g2 and schema_ok, msg_g2)
+    print(f"[{'PASS' if (pass_g2 and schema_ok) else 'FAIL'}] G2: {msg_g2}")
+
+    print("\n--- Auditing Gate G3: Target Availability ---")
+    pass_g3, msg_g3 = validate_gate_g3(eval_panel)
+    gate_results["G3"] = (pass_g3, msg_g3)
+    print(f"[{'PASS' if pass_g3 else 'FAIL'}] G3: {msg_g3}")
+
+    print("\n--- Auditing Gate G4: Strict Shared Universe ---")
+    pass_g4, msg_g4 = validate_gate_g4(eval_panel)
+    gate_results["G4"] = (pass_g4, msg_g4)
+    print(f"[{'PASS' if pass_g4 else 'FAIL'}] G4: {msg_g4}")
+
+    print("\n--- Auditing Gate G5: Row-Count and Fold Reconciliation ---")
+    pass_g5, msg_g5 = validate_gate_g5(panel)
+    gate_results["G5"] = (pass_g5, msg_g5)
+    print(f"[{'PASS' if pass_g5 else 'FAIL'}] G5: {msg_g5}")
+    # Print fold detail table
+    for f in FOLD_DEFINITIONS:
+        k = f["fold"]
+        exp = f["expected_counts"]
+        in_tr = len(panel[(panel["session"] >= f["inner_train"][0]) & (panel["session"] <= f["inner_train"][1])])
+        in_val = len(panel[(panel["session"] >= f["inner_val"][0]) & (panel["session"] <= f["inner_val"][1])])
+        refit = len(panel[(panel["session"] >= f["outer_refit"][0]) & (panel["session"] <= f["outer_refit"][1])])
+        ev_ret = len(panel[(panel["session"] >= f["eval_retained"][0]) & (panel["session"] <= f["eval_retained"][1])])
+        print(f"  Fold {k} ({f['eval_year']}): Inner-Train={in_tr} (exp {exp['inner_train']}), Inner-Val={in_val} (exp {exp['inner_val']}), Outer-Refit={refit} (exp {exp['outer_refit']}), Retained-Eval={ev_ret} (exp {exp['eval_retained']})")
+
+    print("\n--- Auditing Gate G6: Missingness Contract ---")
+    pass_g6, msg_g6 = validate_gate_g6(panel)
+    gate_results["G6"] = (pass_g6, msg_g6)
+    print(f"[{'PASS' if pass_g6 else 'FAIL'}] G6: {msg_g6}")
+
+    print("\n--- Auditing Gate G7: Warm-Up Containment Invariant ---")
+    pass_g7, msg_g7 = validate_gate_g7(panel)
+    gate_results["G7"] = (pass_g7, msg_g7)
+    print(f"[{'PASS' if pass_g7 else 'FAIL'}] G7: {msg_g7}")
+
+    print("\n================================================================================")
+    print("AUDIT SUMMARY AND VERDICT")
+    print("================================================================================")
+    all_passed = all(status for status, _ in gate_results.values()) and fixtures_ok
+    for g, (st, msg) in gate_results.items():
+        print(f"[{'PASS' if st else 'FAIL'}] {g}: {msg}")
+
+    print(f"\nOVERALL READINESS VERDICT: {'PASSED - PROTOCOL READY FOR REVIEW' if all_passed else 'FAILED'}")
+    return all_passed
+
+
+if __name__ == "__main__":
+    success = run_full_protocol_audit()
+    sys.exit(0 if success else 1)

@@ -1,0 +1,9 @@
+{
+  "outcome_id": "O-8B",
+  "tier": 3,
+  "recall_ni": "PASS",
+  "ci_criterion": "FAIL",
+  "mechanism": "PASS",
+  "status": "Zero improvement or deterioration. (Baseline A unchanged)",
+  "interpretation": "Candidate C produces equal or worse false-positive share."
+}

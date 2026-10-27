@@ -1,0 +1,15 @@
+{
+  "TP_retained": 413,
+  "FP_retained": 1171,
+  "D_FP": 213,
+  "D_TP": 53,
+  "I_TP": 39,
+  "I_FP": 227,
+  "TN_retained": 23927,
+  "FN_retained": 3557,
+  "conservation_check": "|D_FP| + |D_TP| = 266 == |I_FP| + |I_TP| = 266",
+  "D_FP_upside_count": 158,
+  "rho_upside_pct": 74.17840375586854,
+  "rho_upside_prop": 0.7417840375586855,
+  "diagnostic_pass": true
+}

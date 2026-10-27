@@ -1,0 +1,303 @@
+{
+  "metadata": {
+    "schema_version": "1.0.0",
+    "generated_at_utc": "2026-10-27T16:55:00Z",
+    "repository": "C:\\dev\\AQQIP",
+    "auditor": "Antigravity Project Governance Audit",
+    "governing_specifications": [
+      {
+        "name": "aqqip_volatility_spec_v4_7.md",
+        "sha256": "eabd5e448d038dd26ce5168c4c1bb652d97980e508da53805710d5cfd0d69ec1",
+        "status": "FROZEN_UNCHANGED"
+      },
+      {
+        "name": "phase2_closure_addendum.md",
+        "sha256": "84bf61ee210c624a3d3e9d4cc19b94641fb2f6e01c6ab1e0679ae0e3e06f7523",
+        "status": "FINAL_REGISTERED_DISPOSITION"
+      },
+      {
+        "name": "phase3_research_design_v1_2.md",
+        "sha256": "32056b50b86ec7af7e126fddee249dd981747c96ea401ba821abc0fbb99bee65",
+        "status": "CURRENT_PROSPECTIVE_PROTOCOL"
+      }
+    ]
+  },
+  "phase_2_asymmetric_volatility_evaluation": {
+    "status": "CLOSED_FROZEN",
+    "evaluation_panel": "2021-2024 (Folds 1-4, 925 retained dates, 32 securities, 29,600 observations)",
+    "primary_comparison": "Candidate_C vs Baseline Candidate_A",
+    "daily_alert_budget": {
+      "fraction": 0.05,
+      "k_t_daily": 2,
+      "total_alerts_per_candidate": 1850
+    },
+    "decision_outcome": {
+      "outcome_id": "O-8B",
+      "tier": 3,
+      "status": "Zero improvement or deterioration. Baseline A unchanged.",
+      "interpretation": "Candidate C produces equal or worse false-positive share. Ineligible for promotion.",
+      "recall_non_inferiority": "PASS",
+      "ci_detectability_criterion": "FAIL",
+      "mechanistic_attribution": "PASS"
+    },
+    "pooled_candidates": [
+      {
+        "candidate": "Candidate_A",
+        "role": "Baseline / Production Standard",
+        "features_count": 11,
+        "features_list": [
+          "return_1d", "return_5d", "return_20d", "return_60d",
+          "volatility_20d", "daily_range_pct", "avg_range_20d",
+          "volume_z_score_20d", "drawdown_60d", "return_20d_rel", "vol_ratio_20d"
+        ],
+        "eval_observations": 29600,
+        "total_alerts": 1850,
+        "tp": 466,
+        "fp": 1384,
+        "tn": 24154,
+        "fn": 3596,
+        "false_positive_share_pct": 74.8108108108108,
+        "false_positive_share_prop": 0.7481081081081081,
+        "recall_pct": 11.472181191531265,
+        "recall_prop": 0.11472181191531265,
+        "precision_pct": 25.189189189189186,
+        "f1_score": 0.15764546684709066,
+        "mean_selected_boosting_rounds": 46.75
+      },
+      {
+        "candidate": "Candidate_B",
+        "role": "Exploratory Benchmark (Additive DSV_20)",
+        "features_count": 12,
+        "eval_observations": 29600,
+        "total_alerts": 1850,
+        "tp": 461,
+        "fp": 1389,
+        "tn": 24149,
+        "fn": 3601,
+        "false_positive_share_pct": 75.08108108108108,
+        "false_positive_share_prop": 0.7508108108108108,
+        "recall_pct": 11.349089118660759,
+        "recall_prop": 0.11349089118660759,
+        "precision_pct": 24.91891891891892,
+        "f1_score": 0.15595399188092016,
+        "mean_selected_boosting_rounds": 45.5
+      },
+      {
+        "candidate": "Candidate_C",
+        "role": "Primary Challenger (DSV_20 substituted for volatility_20d)",
+        "features_count": 11,
+        "eval_observations": 29600,
+        "total_alerts": 1850,
+        "tp": 452,
+        "fp": 1398,
+        "tn": 24140,
+        "fn": 3610,
+        "false_positive_share_pct": 75.56756756756758,
+        "false_positive_share_prop": 0.7556756756756757,
+        "recall_pct": 11.127523387493845,
+        "recall_prop": 0.11127523387493846,
+        "precision_pct": 24.43243243243243,
+        "f1_score": 0.15290933694181325,
+        "mean_selected_boosting_rounds": 49.75
+      },
+      {
+        "candidate": "Candidate_D",
+        "role": "Exploratory Benchmark (Additive DAR_20)",
+        "features_count": 12,
+        "eval_observations": 29600,
+        "total_alerts": 1850,
+        "tp": 471,
+        "fp": 1379,
+        "tn": 24159,
+        "fn": 3591,
+        "false_positive_share_pct": 74.54054054054055,
+        "false_positive_share_prop": 0.7454054054054055,
+        "recall_pct": 11.595273264401772,
+        "recall_prop": 0.11595273264401773,
+        "precision_pct": 25.45945945945946,
+        "f1_score": 0.1593369418132612,
+        "mean_selected_boosting_rounds": 50.0
+      }
+    ],
+    "primary_statistical_inference": {
+      "point_delta_fp_share_pp": 0.7567567567567601,
+      "point_delta_fp_share_prop": 0.007567567567567601,
+      "ci_fp_share_95_pp": [-0.21621621621621429, 1.8378378378378413],
+      "ci_fp_share_95_prop": [-0.0021621621621621427, 0.018378378378378413],
+      "ci_spans_zero": true,
+      "statistically_significant_deterioration": false,
+      "point_delta_recall_pp": -0.3446578040374196,
+      "point_delta_recall_prop": -0.003446578040374196,
+      "lb_recall_5th_percentile_pp": -0.7954877265082129,
+      "lb_recall_5th_percentile_prop": -0.007954877265082129,
+      "recall_non_inferiority_hurdle_pp": -1.0,
+      "recall_non_inferiority_status": "PASS",
+      "bootstrap_config": {
+        "block_length_sessions": 20,
+        "n_replicates": 1000,
+        "random_seed": 20240101,
+        "n_accepted": 1000,
+        "n_rejected": 0
+      }
+    },
+    "alert_attribution_taxonomy": {
+      "tp_retained": 413,
+      "fp_retained": 1171,
+      "displaced_fp_d_fp": 213,
+      "displaced_tp_d_tp": 53,
+      "introduced_tp_i_tp": 39,
+      "introduced_fp_i_fp": 227,
+      "tn_retained": 23927,
+      "fn_retained": 3557,
+      "budget_conservation_identity": "266 == 266",
+      "d_fp_upside_forward_return_count": 158,
+      "upside_attribution_ratio_pct": 74.17840375586854,
+      "diagnostic_status": "PASS (> 60.0%)",
+      "governance_role": "Explanatory only; cannot override primary false-positive criteria"
+    }
+  },
+  "diagnostic_holdout_models": {
+    "evaluation_panel": "2025-2026 holdout (authoritative_eval_predictions_2025_2026.parquet)",
+    "models": [
+      {
+        "model_name": "M",
+        "run_id": "59a7f799181243c796b73ee3b03f5686",
+        "experiment_id": "674838737238677343",
+        "feature_count": 9,
+        "test_roc_auc": 0.6170,
+        "test_pr_auc": 0.1916,
+        "test_brier_score": 0.11477,
+        "test_f1_at_operational_threshold": 0.2738,
+        "test_ece": 0.0262,
+        "test_bss_test_prev": 0.0141
+      },
+      {
+        "model_name": "MF",
+        "run_id": "31ac56b4ff71411dad7cb13315459c30",
+        "experiment_id": "674838737238677343",
+        "feature_count": 11,
+        "test_roc_auc": 0.6077,
+        "test_pr_auc": 0.1805,
+        "test_brier_score": 0.11549,
+        "test_f1_at_operational_threshold": 0.2713,
+        "test_ece": 0.0304,
+        "test_bss_test_prev": 0.0079
+      },
+      {
+        "model_name": "MFQ",
+        "run_id": "54a2403adc824c179a20a75208325a10",
+        "experiment_id": "674838737238677343",
+        "feature_count": 20,
+        "test_roc_auc": 0.5775,
+        "test_pr_auc": 0.1590,
+        "test_brier_score": 0.11641,
+        "test_f1_at_operational_threshold": 0.2168,
+        "test_ece": 0.0277,
+        "test_bss_test_prev": 0.0000
+      },
+      {
+        "model_name": "M_Regularized",
+        "run_id": "62d5c881d4bb4922b3d93ccaad9b5438",
+        "experiment_id": "125769975230458810",
+        "feature_count": 11,
+        "test_roc_auc_diagnostic": 0.6165,
+        "test_pr_auc_diagnostic": 0.1878,
+        "test_brier_score_diagnostic": 0.11447,
+        "test_f1_at_operational_threshold": 0.2780,
+        "test_precision_at_operational_threshold": 0.1713,
+        "test_recall_at_operational_threshold": 0.7359,
+        "test_ece": 0.0202,
+        "test_brier_skill_deployable": 0.0286,
+        "val_roc_auc": 0.6262,
+        "val_pr_auc": 0.1455,
+        "val_f1_at_op": 0.2190
+      },
+      {
+        "model_name": "Baseline_df161",
+        "run_id": "df161d0bc48349debc7cdb47810111d7",
+        "experiment_id": "674838737238677343",
+        "feature_count": 11,
+        "test_roc_auc": 0.5871,
+        "test_pr_auc": 0.1723,
+        "test_brier_score": 0.0852,
+        "test_precision_default_05": 0.0,
+        "test_recall_default_05": 0.0,
+        "test_f1_default_05": 0.0,
+        "val_roc_auc": 0.5630,
+        "val_pr_auc": 0.0584,
+        "val_brier_score": 0.0409,
+        "baseline_lr_roc_auc": 0.6744,
+        "baseline_lr_pr_auc": 0.1521
+      }
+    ]
+  },
+  "test_suite_status": {
+    "total_tests_collected": 155,
+    "collection_time_seconds": 12.98,
+    "unit_tests_sample_passing": 11,
+    "historical_synchronous_pass_count": 104,
+    "collection_errors_on_host_python": [
+      {
+        "file": "tests/test_qualitative_integration.py",
+        "error": "ModuleNotFoundError: No module named 'sentence_transformers'",
+        "root_cause": "Package installed inside Docker Python 3.11 image; absent from host Python 3.14"
+      },
+      {
+        "file": "tests/test_qualitative_pipeline.py",
+        "error": "ModuleNotFoundError: No module named 'langchain_core'",
+        "root_cause": "Package installed inside Docker Python 3.11 image; absent from host Python 3.14"
+      }
+    ]
+  },
+  "artifact_hashes_and_provenance": {
+    "phase2_closure_addendum.md": {
+      "sha256": "84bf61ee210c624a3d3e9d4cc19b94641fb2f6e01c6ab1e0679ae0e3e06f7523",
+      "size_bytes": 9916,
+      "status": "VERIFIED_MATCH"
+    },
+    "phase3_research_design_v1_1.md": {
+      "sha256": "5e5909560fdd7d598c9634853b3a5bc65ceb12ffa731f378aa8e9475f5644ece",
+      "size_bytes": 26672,
+      "status": "VERIFIED_MATCH"
+    },
+    "phase3_research_design_v1_2.md": {
+      "sha256": "32056b50b86ec7af7e126fddee249dd981747c96ea401ba821abc0fbb99bee65",
+      "size_bytes": 21090,
+      "status": "VERIFIED_MATCH"
+    },
+    "pre_training_freeze_manifest_phase1c.json": {
+      "size_bytes": 9416,
+      "status": "VERIFIED_PRESENT"
+    },
+    "authoritative_eval_predictions_2025_2026.parquet": {
+      "size_bytes": 345295,
+      "status": "VERIFIED_PRESENT"
+    },
+    "authoritative_eval_predictions_2025_2026.csv": {
+      "size_bytes": 5247120,
+      "status": "VERIFIED_PRESENT"
+    }
+  },
+  "known_metric_gaps_and_governance_risks": [
+    {
+      "item": "Phase 2 Runner Script SHA Omission",
+      "detail": "execution_summary.json captured spec_hash and timestamps but omitted the runner script SHA-256 hash. Lineage reconstructed from file timestamps.",
+      "severity": "Minor Audit Defect (Does not affect numerical reproducibility)"
+    },
+    {
+      "item": "Bootstrap Block Resampling Sequences Unpersisted",
+      "detail": "Individual resampled block-index arrays (1000 draws x 4 folds) were not saved to disk as a dedicated table, though reproducible with deterministic seed 20240101.",
+      "severity": "Minor Provenance Defect"
+    },
+    {
+      "item": "Phase 3 Prospective Power Disconnect in v1.1",
+      "detail": "v1.1 claimed 84.8% power to detect -4.0 pp effect by testing mu < 0 rather than joint probability P(delta <= -4.0 pp and CI < 0 and Recall NI >= -1.0 pp). Corrected in v1.2 audit.",
+      "severity": "Methodological Defect in v1.1 (Resolved in v1.2)"
+    },
+    {
+      "item": "Streamlit Dashboard Missing Business Views",
+      "detail": "dashboard/app.py is currently a Phase 1 container healthcheck stub; all 3 planned business views (Accuracy Tracker, Lie Spotter, MARL Crash) remain to be implemented.",
+      "severity": "Engineering Implementation Gap"
+    }
+  ]
+}

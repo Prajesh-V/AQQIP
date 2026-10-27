@@ -1,0 +1,26 @@
+{
+  "point_delta_fp_share_pp": 0.7567567567567601,
+  "point_delta_fp_share_prop": 0.007567567567567601,
+  "point_delta_recall_pp": -0.3446578040374196,
+  "point_delta_recall_prop": -0.003446578040374196,
+  "ci_fp_share_95_pp": [
+    -0.21621621621621429,
+    1.8378378378378413
+  ],
+  "ci_fp_share_95_prop": [
+    -0.0021621621621621427,
+    0.018378378378378413
+  ],
+  "lb_recall_5th_percentile_pp": -0.7954877265082129,
+  "lb_recall_5th_percentile_prop": -0.007954877265082129,
+  "n_accepted": 1000,
+  "n_rejected": 0,
+  "n_attempted": 1000,
+  "rejection_breakdown": {
+    "zero_positives": 0,
+    "zero_alerts": 0
+  },
+  "block_length": 20,
+  "n_replicates": 1000,
+  "random_seed": 20240101
+}

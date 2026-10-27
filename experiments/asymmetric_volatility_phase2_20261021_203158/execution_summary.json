@@ -1,0 +1,158 @@
+{
+  "execution_status": "COMPLETED_SUCCESS",
+  "start_time_utc": "2026-10-21T15:01:58.499557+00:00",
+  "end_time_utc": "2026-10-21T15:03:14.632317+00:00",
+  "elapsed_seconds": 76.13274455070496,
+  "spec_hash": "eabd5e448d038dd26ce5168c4c1bb652d97980e508da53805710d5cfd0d69ec1",
+  "output_directory": "C:\\dev\\AQQIP\\experiments\\asymmetric_volatility_phase2_20261021_203158",
+  "decision_outcome": {
+    "outcome_id": "O-8B",
+    "tier": 3,
+    "recall_ni": "PASS",
+    "ci_criterion": "FAIL",
+    "mechanism": "PASS",
+    "status": "Zero improvement or deterioration. (Baseline A unchanged)",
+    "interpretation": "Candidate C produces equal or worse false-positive share."
+  },
+  "pooled_metrics": [
+    {
+      "candidate": "Candidate_A",
+      "role": "Primary (Formal)",
+      "features_count": 11,
+      "mean_selected_rounds": 46.75,
+      "eval_observations": 29600,
+      "total_alerts": 1850,
+      "tp": 466,
+      "fp": 1384,
+      "tn": 24154,
+      "fn": 3596,
+      "fp_share_prop": 0.7481081081081081,
+      "fp_share_pp": 74.8108108108108,
+      "recall_prop": 0.11472181191531265,
+      "recall_pp": 11.472181191531265,
+      "precision_pp": 25.189189189189186,
+      "f1_score": 0.15764546684709066
+    },
+    {
+      "candidate": "Candidate_B",
+      "role": "Exploratory (Informational Only)",
+      "features_count": 12,
+      "mean_selected_rounds": 45.5,
+      "eval_observations": 29600,
+      "total_alerts": 1850,
+      "tp": 461,
+      "fp": 1389,
+      "tn": 24149,
+      "fn": 3601,
+      "fp_share_prop": 0.7508108108108108,
+      "fp_share_pp": 75.08108108108108,
+      "recall_prop": 0.11349089118660759,
+      "recall_pp": 11.349089118660759,
+      "precision_pp": 24.91891891891892,
+      "f1_score": 0.15595399188092016
+    },
+    {
+      "candidate": "Candidate_C",
+      "role": "Primary (Formal)",
+      "features_count": 11,
+      "mean_selected_rounds": 49.75,
+      "eval_observations": 29600,
+      "total_alerts": 1850,
+      "tp": 452,
+      "fp": 1398,
+      "tn": 24140,
+      "fn": 3610,
+      "fp_share_prop": 0.7556756756756757,
+      "fp_share_pp": 75.56756756756758,
+      "recall_prop": 0.11127523387493846,
+      "recall_pp": 11.127523387493845,
+      "precision_pp": 24.43243243243243,
+      "f1_score": 0.15290933694181325
+    },
+    {
+      "candidate": "Candidate_D",
+      "role": "Exploratory (Informational Only)",
+      "features_count": 12,
+      "mean_selected_rounds": 50.0,
+      "eval_observations": 29600,
+      "total_alerts": 1850,
+      "tp": 471,
+      "fp": 1379,
+      "tn": 24159,
+      "fn": 3591,
+      "fp_share_prop": 0.7454054054054055,
+      "fp_share_pp": 74.54054054054055,
+      "recall_prop": 0.11595273264401773,
+      "recall_pp": 11.595273264401772,
+      "precision_pp": 25.45945945945946,
+      "f1_score": 0.1593369418132612
+    }
+  ],
+  "bootstrap_summary": {
+    "point_delta_fp_share_pp": 0.7567567567567601,
+    "point_delta_fp_share_prop": 0.007567567567567601,
+    "point_delta_recall_pp": -0.3446578040374196,
+    "point_delta_recall_prop": -0.003446578040374196,
+    "ci_fp_share_95_pp": [
+      -0.21621621621621429,
+      1.8378378378378413
+    ],
+    "ci_fp_share_95_prop": [
+      -0.0021621621621621427,
+      0.018378378378378413
+    ],
+    "lb_recall_5th_percentile_pp": -0.7954877265082129,
+    "lb_recall_5th_percentile_prop": -0.007954877265082129,
+    "n_accepted": 1000,
+    "n_rejected": 0,
+    "n_attempted": 1000,
+    "rejection_breakdown": {
+      "zero_positives": 0,
+      "zero_alerts": 0
+    },
+    "block_length": 20,
+    "n_replicates": 1000,
+    "random_seed": 20240101
+  },
+  "attribution_results": {
+    "TP_retained": 413,
+    "FP_retained": 1171,
+    "D_FP": 213,
+    "D_TP": 53,
+    "I_TP": 39,
+    "I_FP": 227,
+    "TN_retained": 23927,
+    "FN_retained": 3557,
+    "conservation_check": "|D_FP| + |D_TP| = 266 == |I_FP| + |I_TP| = 266",
+    "D_FP_upside_count": 158,
+    "rho_upside_pct": 74.17840375586854,
+    "rho_upside_prop": 0.7417840375586855,
+    "diagnostic_pass": true
+  },
+  "selected_rounds": {
+    "A": {
+      "1": 18,
+      "2": 48,
+      "3": 100,
+      "4": 21
+    },
+    "B": {
+      "1": 14,
+      "2": 49,
+      "3": 101,
+      "4": 18
+    },
+    "C": {
+      "1": 11,
+      "2": 56,
+      "3": 106,
+      "4": 26
+    },
+    "D": {
+      "1": 14,
+      "2": 51,
+      "3": 117,
+      "4": 18
+    }
+  }
+}

@@ -1,0 +1,265 @@
+# =============================================================================
+# AQQIP Docker Compose — Local Development Environment
+# $0 infrastructure: MySQL + MongoDB + Python services + MLflow + Streamlit
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL 8.0 — Structured store (prices, ratios, predictions, MARL runs)
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: aqqip-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-aqqip_root_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-aqqip}
+      MYSQL_USER: ${MYSQL_USER:-aqqip_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-aqqip_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - aqqip-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-aqqip_root_pass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # MongoDB — Document store (SEC filings, semantic diffs)
+  # ---------------------------------------------------------------------------
+  mongodb:
+    image: mongo:7.0
+    container_name: aqqip-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-aqqip_raw}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./db/mongo/init/init-indexes.js:/docker-entrypoint-initdb.d/init-indexes.js:ro
+    networks:
+      - aqqip-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # MLflow UI — Experiment tracking (SQLite backend)
+  # ---------------------------------------------------------------------------
+  mlflow_ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-mlflow
+    restart: unless-stopped
+    command: >
+      mlflow ui
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri sqlite:///mlruns/mlflow.db
+        --default-artifact-root /mlruns/artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlruns
+    networks:
+      - aqqip-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Ingestion Service — Phase 2 stub (yfinance + EDGAR fetchers)
+  # ---------------------------------------------------------------------------
+  ingestion_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-ingestion
+    command: ["python", "-m", "src.stub_service", "--name", "ingestion_service"]
+    env_file:
+      - .env
+    volumes:
+      - chroma_data:/app/chroma_data
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+    networks:
+      - aqqip-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Quant Engine — Phase 3 stub (Beneish, Altman, LightGBM)
+  # ---------------------------------------------------------------------------
+  quant_engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-quant
+    command: ["python", "-m", "src.stub_service", "--name", "quant_engine"]
+    env_file:
+      - .env
+    volumes:
+      - mlflow_data:/mlruns
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+    networks:
+      - aqqip-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Qualitative Engine — Phase 4 stub (NLP, embeddings, semantic diff)
+  # ---------------------------------------------------------------------------
+  qualitative_engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-qualitative
+    command: ["python", "-m", "src.stub_service", "--name", "qualitative_engine"]
+    env_file:
+      - .env
+    volumes:
+      - chroma_data:/app/chroma_data
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+    networks:
+      - aqqip-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # MARL Engine — Phase 6 stub (Gym environment, agents)
+  # ---------------------------------------------------------------------------
+  marl_engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-marl
+    command: ["python", "-m", "src.stub_service", "--name", "marl_engine"]
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+    networks:
+      - aqqip-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # MLOps Loop — Phase 8 stub (prediction resolver, retraining)
+  # ---------------------------------------------------------------------------
+  mlops_loop:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-mlops
+    command: ["python", "-m", "src.stub_service", "--name", "mlops_loop"]
+    env_file:
+      - .env
+    volumes:
+      - mlflow_data:/mlruns
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+    networks:
+      - aqqip-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Streamlit Dashboard — Phase 9 stub (read-only UI)
+  # ---------------------------------------------------------------------------
+  streamlit_dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: aqqip-dashboard
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true"]
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - chroma_data:/app/chroma_data:ro
+      - ./dashboard:/app/dashboard:ro
+      - ./config:/app/config:ro
+    networks:
+      - aqqip-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+# =============================================================================
+# Volumes — persistent local storage
+# =============================================================================
+volumes:
+  mysql_data:
+    name: aqqip_mysql_data
+  mongo_data:
+    name: aqqip_mongo_data
+  chroma_data:
+    name: aqqip_chroma_data
+  mlflow_data:
+    name: aqqip_mlflow_data
+
+# =============================================================================
+# Network
+# =============================================================================
+networks:
+  aqqip-net:
+    name: aqqip-net
+    driver: bridge

@@ -1,0 +1,549 @@
+"""
+Automated Unit and Integration Tests for AQQIP Asymmetric Volatility Experiment
+
+Covers the 13 required verification areas from Specification v4.7 and Phase 1 Scope:
+1. Exact DSV, USV, and DAR results on small hand-calculated return sequences.
+2. Denominator-floor behavior, including flat-return and single-sided sequences.
+3. Warm-up boundaries at the expected sessions (s=21 for DSV/DAR, s=61 for return_60d).
+4. Preservation of all four candidate schemas and exact column orders.
+5. Identical date-security index and ordering across candidates.
+6. No feature look-ahead: perturbing prices strictly after date t does not alter features at or before t.
+7. No target-threshold contamination: inner/outer thresholds depend strictly on their respective train partitions.
+8. Label-maturity and purge correctness at each fold boundary (exact boundary tests).
+9. Consistent target-return units, threshold units, and binary-label comparisons.
+10. Bootstrap metric conversions: proportion and percentage-point equivalences.
+11. Deterministic ranking rule and alert budget (alphabetical tie-breaking, k_t=2 for N=32).
+12. Correct behavior when a required feature is missing or non-finite (fails validation).
+13. Preservation of the frozen baseline feature schema and LightGBM hyperparameters.
+"""
+from __future__ import annotations
+
+import datetime
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.quant.asymmetric_volatility_experiment import (
+    CANDIDATE_A_FEATURES,
+    CANDIDATE_B_FEATURES,
+    CANDIDATE_C_FEATURES,
+    CANDIDATE_D_FEATURES,
+    CANDIDATE_SCHEMAS,
+    BASE_LGBM_HYPERPARAMS,
+    TRAINING_POLICY,
+    FOLD_DEFINITIONS,
+    DENOMINATOR_FLOOR,
+    compute_asymmetric_volatility_features,
+    deterministic_rank,
+    compute_daily_alert_budget,
+    assign_daily_alerts,
+    proportion_to_pp,
+    pp_to_proportion,
+    evaluate_decision_matrix,
+    run_moving_block_bootstrap,
+    split_experiment_fold,
+    validate_gate_g1,
+    validate_gate_g2,
+    validate_gate_g3,
+    validate_gate_g4,
+    validate_gate_g5,
+    validate_gate_g6,
+    validate_gate_g7,
+)
+from src.quant.rolling_origin_evaluator import REGULARIZED_MARKET_FEATURES
+from src.quant.target_builder import TargetBuilder
+from src.quant.feature_builder import FeatureBuilder
+
+
+# ==============================================================================
+# 1. Exact DSV, USV, and DAR Hand-Calculated Sequences
+# ==============================================================================
+
+def test_exact_dsv_usv_dar_hand_calculated():
+    """
+    Hand-calculated test case:
+    20 daily returns: 10 of -0.02, followed by 10 of +0.02.
+    neg_sq = 10 * (-0.02)^2 = 0.004 -> mean = 0.0002 -> DSV = sqrt(0.0002) = 0.0141421356...
+    pos_sq = 10 * (+0.02)^2 = 0.004 -> mean = 0.0002 -> USV = sqrt(0.0002) = 0.0141421356...
+    DAR = 0.0141421356 / (0.0141421356 + 1e-4) = 0.99297858...
+    """
+    r = [-0.02] * 10 + [0.02] * 10
+    dates = [datetime.date(2023, 1, 1) + datetime.timedelta(days=i) for i in range(20)]
+    df = pd.DataFrame({
+        "ticker": ["AAPL"] * 20,
+        "trade_date": dates,
+        "return_1d": r,
+    })
+
+    res = compute_asymmetric_volatility_features(df)
+    last_row = res.iloc[-1]
+
+    expected_dsv = np.sqrt(0.0002)
+    expected_usv = np.sqrt(0.0002)
+    expected_dar = expected_dsv / (expected_usv + 1e-4)
+
+    assert np.isclose(last_row["DSV_20"], expected_dsv, rtol=1e-7, atol=1e-8)
+    assert np.isclose(last_row["USV_20"], expected_usv, rtol=1e-7, atol=1e-8)
+    assert np.isclose(last_row["DAR_20"], expected_dar, rtol=1e-7, atol=1e-8)
+
+
+# ==============================================================================
+# 2. Denominator-Floor Behavior and Flat-Return Sequences
+# ==============================================================================
+
+def test_denominator_floor_and_flat_returns():
+    """
+    Verifies denominator floor (+1e-4) prevents division by zero under all edge conditions:
+    1. Flat returns (r = 0.0 everywhere): DSV=0, USV=0, DAR=0.0 / 1e-4 = 0.0 (finite).
+    2. All negative returns (r = -0.01 everywhere): USV=0, DAR=0.01 / 1e-4 = 100.0 (finite).
+    3. All positive returns (r = +0.01 everywhere): DSV=0, DAR=0.0 / (0.01 + 1e-4) = 0.0 (finite).
+    """
+    dates = [datetime.date(2023, 1, 1) + datetime.timedelta(days=i) for i in range(20)]
+
+    # Case 1: Flat returns
+    df_flat = pd.DataFrame({"ticker": ["TEST"] * 20, "trade_date": dates, "return_1d": [0.0] * 20})
+    res_flat = compute_asymmetric_volatility_features(df_flat).iloc[-1]
+    assert np.isclose(res_flat["DSV_20"], 0.0)
+    assert np.isclose(res_flat["USV_20"], 0.0)
+    assert np.isclose(res_flat["DAR_20"], 0.0)
+    assert not np.isnan(res_flat["DAR_20"])
+    assert not np.isinf(res_flat["DAR_20"])
+
+    # Case 2: All negative
+    df_neg = pd.DataFrame({"ticker": ["TEST"] * 20, "trade_date": dates, "return_1d": [-0.01] * 20})
+    res_neg = compute_asymmetric_volatility_features(df_neg).iloc[-1]
+    assert np.isclose(res_neg["DSV_20"], 0.01)
+    assert np.isclose(res_neg["USV_20"], 0.0)
+    assert np.isclose(res_neg["DAR_20"], 0.01 / 1e-4)  # 100.0
+    assert not np.isinf(res_neg["DAR_20"])
+
+    # Case 3: All positive
+    df_pos = pd.DataFrame({"ticker": ["TEST"] * 20, "trade_date": dates, "return_1d": [0.01] * 20})
+    res_pos = compute_asymmetric_volatility_features(df_pos).iloc[-1]
+    assert np.isclose(res_pos["DSV_20"], 0.0)
+    assert np.isclose(res_pos["USV_20"], 0.01)
+    assert np.isclose(res_pos["DAR_20"], 0.0)
+
+
+# ==============================================================================
+# 3. Warm-Up Boundaries at Expected Sessions
+# ==============================================================================
+
+def test_warmup_boundaries():
+    """
+    Verifies warm-up boundary constraints:
+    - Session 1 has no prior price, so return_1d is NaN.
+    - Sessions 1..20 have NaN for 20-session rolling features (DSV_20, USV_20, DAR_20).
+    - Session 21 is the first valid non-NaN session for DSV_20, USV_20, DAR_20.
+    """
+    dates = [datetime.date(2023, 1, 1) + datetime.timedelta(days=i) for i in range(30)]
+    prices = [100.0 * (1.0 + 0.005 * i) for i in range(30)]
+    df = pd.DataFrame({
+        "ticker": ["AAPL"] * 30,
+        "trade_date": dates,
+        "adj_close": prices,
+    })
+
+    res = compute_asymmetric_volatility_features(df)
+
+    # Sessions 0 to 19 (indices 0 to 19, i.e., s in 1..20) must be NaN for DSV_20
+    for idx in range(20):
+        assert pd.isna(res.loc[idx, "DSV_20"]), f"Session {idx+1} should be NaN for DSV_20"
+        assert pd.isna(res.loc[idx, "DAR_20"]), f"Session {idx+1} should be NaN for DAR_20"
+
+    # Session 21 (index 20) must be non-NaN
+    assert not pd.isna(res.loc[20, "DSV_20"]), "Session 21 must have valid non-NaN DSV_20"
+    assert not pd.isna(res.loc[20, "DAR_20"]), "Session 21 must have valid non-NaN DAR_20"
+
+
+# ==============================================================================
+# 4. Preservation of All Four Candidate Schemas and Column Orders
+# ==============================================================================
+
+def test_candidate_schemas_and_order():
+    """
+    Verifies that Candidate A, B, C, D schemas match Specification v4.7 exactly:
+    - Candidate A: 11 baseline features matching REGULARIZED_MARKET_FEATURES.
+    - Candidate B: 12 features (Candidate A + DSV_20).
+    - Candidate C: 11 features (Candidate A with volatility_20d replaced by DSV_20).
+    - Candidate D: 12 features (Candidate A + DAR_20).
+    """
+    assert len(CANDIDATE_A_FEATURES) == 11
+    assert CANDIDATE_A_FEATURES == tuple(REGULARIZED_MARKET_FEATURES)
+
+    assert len(CANDIDATE_B_FEATURES) == 12
+    assert CANDIDATE_B_FEATURES[:11] == CANDIDATE_A_FEATURES
+    assert CANDIDATE_B_FEATURES[11] == "DSV_20"
+
+    assert len(CANDIDATE_C_FEATURES) == 11
+    assert "volatility_20d" not in CANDIDATE_C_FEATURES
+    assert "DSV_20" in CANDIDATE_C_FEATURES
+    assert "vol_ratio_20d" in CANDIDATE_C_FEATURES
+    # Check that position of DSV_20 in C is index 4 (where volatility_20d was in A)
+    assert CANDIDATE_A_FEATURES.index("volatility_20d") == 4
+    assert CANDIDATE_C_FEATURES[4] == "DSV_20"
+
+    assert len(CANDIDATE_D_FEATURES) == 12
+    assert CANDIDATE_D_FEATURES[:11] == CANDIDATE_A_FEATURES
+    assert CANDIDATE_D_FEATURES[11] == "DAR_20"
+
+
+# ==============================================================================
+# 5. Identical Date-Security Index and Ordering Across Candidates
+# ==============================================================================
+
+def test_identical_date_security_index_across_candidates():
+    """
+    Verifies that slicing a panel by any of the four candidate feature schemas
+    preserves the identical rows, tickers, and dates in the exact same order.
+    """
+    dates = [datetime.date(2023, 1, 1) + datetime.timedelta(days=i) for i in range(5)]
+    tickers = ["AAPL", "MSFT", "GOOG", "NVDA"]
+    rows = []
+    for d in dates:
+        for t in tickers:
+            rows.append({"ticker": t, "trade_date": d, "val": 1.0})
+    df = pd.DataFrame(rows)
+
+    # Add all required candidate columns with dummy values
+    all_cand_feats = set(CANDIDATE_B_FEATURES + CANDIDATE_C_FEATURES + CANDIDATE_D_FEATURES)
+    for f in all_cand_feats:
+        df[f] = 0.5
+
+    sub_A = df[["ticker", "trade_date"] + list(CANDIDATE_A_FEATURES)]
+    sub_B = df[["ticker", "trade_date"] + list(CANDIDATE_B_FEATURES)]
+    sub_C = df[["ticker", "trade_date"] + list(CANDIDATE_C_FEATURES)]
+    sub_D = df[["ticker", "trade_date"] + list(CANDIDATE_D_FEATURES)]
+
+    assert len(sub_A) == len(sub_B) == len(sub_C) == len(sub_D) == 20
+    pd.testing.assert_series_equal(sub_A["ticker"], sub_C["ticker"])
+    pd.testing.assert_series_equal(sub_A["trade_date"], sub_C["trade_date"])
+
+
+# ==============================================================================
+# 6. No Feature Look-Ahead (Temporal Perturbation Invariant)
+# ==============================================================================
+
+def test_no_feature_lookahead():
+    """
+    Verifies zero look-ahead:
+    Perturbing prices strictly after session t=25 must leave features at or before
+    session t=25 bit-for-bit identical.
+    """
+    dates = [datetime.date(2023, 1, 1) + datetime.timedelta(days=i) for i in range(40)]
+    prices_orig = [100.0 * (1.0 + 0.002 * i) for i in range(40)]
+    df_orig = pd.DataFrame({"ticker": ["AAPL"] * 40, "trade_date": dates, "adj_close": prices_orig})
+    feats_orig = compute_asymmetric_volatility_features(df_orig)
+
+    # Perturb prices strictly after index 25 (sessions 27..40)
+    prices_perturbed = list(prices_orig)
+    for i in range(26, 40):
+        prices_perturbed[i] = prices_orig[i] * 5.0  # huge shock
+    df_perturbed = pd.DataFrame({"ticker": ["AAPL"] * 40, "trade_date": dates, "adj_close": prices_perturbed})
+    feats_perturbed = compute_asymmetric_volatility_features(df_perturbed)
+
+    # Assert features up to index 25 are completely unchanged
+    pd.testing.assert_series_equal(
+        feats_orig.loc[:25, "DSV_20"],
+        feats_perturbed.loc[:25, "DSV_20"],
+    )
+    pd.testing.assert_series_equal(
+        feats_orig.loc[:25, "DAR_20"],
+        feats_perturbed.loc[:25, "DAR_20"],
+    )
+
+
+# ==============================================================================
+# 7. No Target-Threshold Contamination Across Partitions
+# ==============================================================================
+
+def test_no_target_threshold_contamination():
+    """
+    Verifies that:
+    1. tau_inner depends strictly on inner_train; outer_eval outcomes cannot alter tau_inner.
+    2. tau_outer depends strictly on outer_refit; outer_eval outcomes cannot alter tau_outer.
+    """
+    dates = [datetime.date(2021, 1, 1) + datetime.timedelta(days=i) for i in range(2000)]
+    # Construct synthetic panel with sessions 1 to 2000
+    df = pd.DataFrame({
+        "ticker": ["AAPL"] * 2000,
+        "trade_date": dates,
+        "session": list(range(1, 2001)),
+        "forward_return_pct": np.linspace(-15.0, 15.0, 2000),
+    })
+
+    part_orig = split_experiment_fold(df, fold_num=1, alpha=0.10)
+    tau_in_orig = part_orig["tau_inner"]
+    tau_out_orig = part_orig["tau_outer"]
+
+    # Perturb forward_return_pct strictly in the outer_eval window (sessions 1764 to 1995)
+    df_perturbed = df.copy()
+    mask_eval = (df_perturbed["session"] >= 1764) & (df_perturbed["session"] <= 1995)
+    df_perturbed.loc[mask_eval, "forward_return_pct"] = -99.0  # catastrophic crash
+
+    part_perturbed = split_experiment_fold(df_perturbed, fold_num=1, alpha=0.10)
+    tau_in_perturbed = part_perturbed["tau_inner"]
+    tau_out_perturbed = part_perturbed["tau_outer"]
+
+    # Invariants: outer_eval crash MUST NOT change tau_inner or tau_outer
+    assert np.isclose(tau_in_orig, tau_in_perturbed), "tau_inner was contaminated by outer_eval returns!"
+    assert np.isclose(tau_out_orig, tau_out_perturbed), "tau_outer was contaminated by outer_eval returns!"
+
+
+# ==============================================================================
+# 8. Label-Maturity and Purge Correctness at Fold Boundaries
+# ==============================================================================
+
+def test_label_maturity_and_purge_correctness():
+    """
+    Verifies the exact boundary rules for Fold 1:
+    - Inner Train: s in [1, 1490]
+    - Inner Split Purge: s in [1491, 1510] (20 sessions purged so outcomes do not cross into val)
+    - Inner Val: s in [1511, 1743]
+    - Outer Refit: s in [1, 1743] (independently reconstructed; restored purged rows [1491, 1510])
+    - Outer Boundary Purge: s in [1744, 1763] (20 sessions purged before outer eval starts at 1764)
+    - Retained Eval: s in [1764, 1995]
+    - Terminal Trim: s in [1996, 2015] (20 sessions trimmed)
+    """
+    f1 = FOLD_DEFINITIONS[0]
+    assert f1["inner_train"] == (1, 1490)
+    assert f1["inner_val"] == (1511, 1743)
+    assert f1["outer_refit"] == (1, 1743)
+    assert f1["eval_retained"] == (1764, 1995)
+    assert f1["eval_trimmed"] == (1996, 2015)
+
+    # Mathematical purging checks:
+    # Inner val starts at 1511 -> s_cut = 1510 -> s + 20 <= 1510 -> s <= 1490.
+    assert 1490 + 20 == 1510
+    # Outer eval starts at 1764 -> s_cut = 1763 -> s + 20 <= 1763 -> s <= 1743.
+    assert 1743 + 20 == 1763
+    # Check that outer_refit covers 1743 sessions:
+    assert f1["outer_refit"][1] - f1["outer_refit"][0] + 1 == 1743
+
+
+# ==============================================================================
+# 9. Consistent Target-Return Units, Threshold Units, and Label Comparisons
+# ==============================================================================
+
+def test_target_return_units_and_comparisons():
+    """
+    Verifies TargetBuilder produces percentage points and label assignment
+    compares percentage points to percentage points.
+    """
+    tb = TargetBuilder()
+    df = pd.DataFrame({
+        "ticker": ["AAPL"] * 4,
+        "trade_date": [datetime.date(2023, 1, 1) + datetime.timedelta(days=i) for i in range(4)],
+        "adj_close": [100.0, 100.0, 90.0, 90.0],
+    })
+    tb.horizon = 2
+    tb.price_field = "adj_close"
+
+    fwd_df = tb.compute_forward_returns(df)
+    # Day 0 to Day 2: price drops from 100 to 90 -> (90 - 100)/100 * 100 = -10.0%
+    val = fwd_df.loc[0, "forward_return_pct"]
+    assert np.isclose(val, -10.0), f"Expected -10.0 percentage points, got {val}"
+
+    # Threshold fitting
+    thresh = tb.fit_threshold(pd.Series([-15.0, -10.0, -5.0, 0.0]), alpha=0.25)
+    # 25th percentile of [-15, -10, -5, 0] is -11.25
+    assert np.isclose(thresh, -11.25)
+
+    # Label assignment: -10.0 <= -11.25 is False (0)
+    labeled = tb.apply_labels(pd.DataFrame({"forward_return_pct": [-10.0, -12.0]}), thresh)
+    assert labeled.loc[0, "target_label"] == 0
+    assert labeled.loc[1, "target_label"] == 1
+
+
+# ==============================================================================
+# 10. Bootstrap Metric Conversions and Decision Matrix Equivalences
+# ==============================================================================
+
+def test_bootstrap_conversions_and_decision_matrix():
+    """
+    Verifies:
+    1. proportion_to_pp(x) == x * 100.0 and pp_to_proportion(x) == x / 100.0.
+    2. Quantile scaling invariance: Quantile(100*X) == 100 * Quantile(X).
+    3. Decision matrix evaluations:
+       - O-1 (Primary target met, CI pass, Recall pass, Mech pass)
+       - O-8A1 (Small improvement, CI pass, Recall pass)
+       - O-8A2 (Small improvement, CI fail, Recall pass)
+       - O-8B (Zero/worse improvement, Recall pass)
+       - O-9 (Recall degradation, effect >= -1.0 pp)
+    """
+    assert np.isclose(proportion_to_pp(-0.04), -4.0)
+    assert np.isclose(pp_to_proportion(-4.0), -0.04)
+
+    # O-1 Case: delta_fp = -4.5 pp, ci_upper = -0.5 pp, lb_recall = -0.2 pp, rho = 70%, d_fp = 10
+    res_o1 = evaluate_decision_matrix(
+        delta_fp_share_pp=-4.5,
+        ci_fp_upper_pp=-0.5,
+        lb_recall_pp=-0.2,
+        rho_upside=70.0,
+        d_fp_count=10,
+    )
+    assert res_o1["outcome_id"] == "O-1"
+    assert "Baseline A unchanged" in res_o1["status"]
+
+    # O-8A1 Case: delta_fp = -0.6 pp, ci_upper = -0.1 pp (statistically detectable), lb_rec = -0.5 pp
+    res_o8a1 = evaluate_decision_matrix(
+        delta_fp_share_pp=-0.6,
+        ci_fp_upper_pp=-0.1,
+        lb_recall_pp=-0.5,
+        rho_upside=50.0,
+        d_fp_count=5,
+    )
+    assert res_o8a1["outcome_id"] == "O-8A1"
+    assert "statistically detectable" in res_o8a1["status"]
+    assert "Baseline A unchanged" in res_o8a1["status"]
+
+    # O-8A2 Case: delta_fp = -0.6 pp, ci_upper = +0.2 pp (inconclusive), lb_rec = -0.5 pp
+    res_o8a2 = evaluate_decision_matrix(
+        delta_fp_share_pp=-0.6,
+        ci_fp_upper_pp=0.2,
+        lb_recall_pp=-0.5,
+        rho_upside=50.0,
+        d_fp_count=5,
+    )
+    assert res_o8a2["outcome_id"] == "O-8A2"
+    assert "inconclusive" in res_o8a2["status"]
+    assert "Baseline A unchanged" in res_o8a2["status"]
+
+    # O-8B Case: delta_fp = +0.5 pp (worse), lb_rec = -0.2 pp
+    res_o8b = evaluate_decision_matrix(
+        delta_fp_share_pp=0.5,
+        ci_fp_upper_pp=1.2,
+        lb_recall_pp=-0.2,
+        rho_upside=50.0,
+        d_fp_count=5,
+    )
+    assert res_o8b["outcome_id"] == "O-8B"
+    assert "Zero improvement or deterioration" in res_o8b["status"]
+
+    # O-9 Case: delta_fp = -0.5 pp, lb_rec = -1.5 pp (FAIL)
+    res_o9 = evaluate_decision_matrix(
+        delta_fp_share_pp=-0.5,
+        ci_fp_upper_pp=0.1,
+        lb_recall_pp=-1.5,
+        rho_upside=50.0,
+        d_fp_count=5,
+    )
+    assert res_o9["outcome_id"] == "O-9"
+    assert "Evidence against Candidate C" in res_o9["status"]
+
+
+# ==============================================================================
+# 11. Deterministic Ranking & Alert Budget (Synthetic Predictions Only)
+# ==============================================================================
+
+def test_deterministic_ranking_and_alert_budget():
+    """
+    Verifies:
+    1. Daily budget for N=32 is max(1, round(32 * 0.05)) = 2 alerts.
+    2. Alphabetical tie-breaking: identical probabilities broken by ticker ascending.
+    """
+    assert compute_daily_alert_budget(32) == 2
+    assert compute_daily_alert_budget(10) == 1
+
+    # Synthetic predictions for 4 tickers with tie
+    df = pd.DataFrame({
+        "trade_date": [datetime.date(2023, 1, 1)] * 4,
+        "ticker": ["MSFT", "AAPL", "GOOG", "AMZN"],
+        "predicted_probability": [0.80, 0.80, 0.50, 0.90],
+    })
+
+    # Expected order:
+    # 1. AMZN (0.90)
+    # 2. AAPL (0.80) [AAPL < MSFT alphabetically]
+    # 3. MSFT (0.80)
+    # 4. GOOG (0.50)
+    ranked = deterministic_rank(df)
+    assert list(ranked["ticker"]) == ["AMZN", "AAPL", "MSFT", "GOOG"]
+
+    # Assign alerts with k_t = 2
+    alerted = assign_daily_alerts(df, fraction=0.50)  # for 4 tickers, round(4*0.5) = 2 alerts
+    top2_tickers = set(alerted[alerted["alert"] == 1]["ticker"])
+    assert top2_tickers == {"AMZN", "AAPL"}
+    assert alerted[alerted["ticker"] == "MSFT"]["alert"].iloc[0] == 0
+
+
+# ==============================================================================
+# 12. Correct Behavior When Feature is Missing or Non-Finite
+# ==============================================================================
+
+def test_unexpected_missingness_fails_validation():
+    """
+    Verifies that Gates G2 and G3 reject NaNs and infinite values in evaluation rows.
+    """
+    # Create valid dummy evaluation panel (925 dates x 32 tickers = 29,600 rows)
+    dates = [datetime.date(2021, 1, 1) + datetime.timedelta(days=i) for i in range(925)]
+    tickers = [f"TICK_{j:02d}" for j in range(32)]
+    rows = []
+    for d in dates:
+        for t in tickers:
+            rows.append({"trade_date": d, "ticker": t, "forward_return_pct": -5.0})
+    df_eval = pd.DataFrame(rows)
+
+    all_feats = list(set(CANDIDATE_B_FEATURES + CANDIDATE_C_FEATURES + CANDIDATE_D_FEATURES))
+    for f in all_feats:
+        df_eval[f] = 0.1
+
+    # Clean panel passes G1, G2, G3
+    assert validate_gate_g1(df_eval)[0]
+    assert validate_gate_g2(df_eval)[0]
+    assert validate_gate_g3(df_eval)[0]
+
+    # Inject NaN into DSV_20 -> G2 must FAIL
+    df_nan = df_eval.copy()
+    df_nan.loc[100, "DSV_20"] = np.nan
+    passed_g2, msg_g2 = validate_gate_g2(df_nan)
+    assert not passed_g2
+    assert "NaNs" in msg_g2
+
+    # Inject inf into DAR_20 -> G2 must FAIL
+    df_inf = df_eval.copy()
+    df_inf.loc[100, "DAR_20"] = np.inf
+    passed_inf, msg_inf = validate_gate_g2(df_inf)
+    assert not passed_inf
+    assert "infs" in msg_inf
+
+    # Inject NaN into forward_return_pct -> G3 must FAIL
+    df_target_nan = df_eval.copy()
+    df_target_nan.loc[50, "forward_return_pct"] = np.nan
+    passed_g3, msg_g3 = validate_gate_g3(df_target_nan)
+    assert not passed_g3
+
+
+# ==============================================================================
+# 13. Preservation of Frozen Baseline Feature Schema and Configuration
+# ==============================================================================
+
+def test_preservation_of_frozen_baseline_schema_and_config():
+    """
+    Verifies that BASE_LGBM_HYPERPARAMS and CANDIDATE_A_FEATURES faithfully
+    preserve the frozen M_Regularized baseline artifact (Run 62d5c881d4bb4922b3d93ccaad9b5438).
+    """
+    assert BASE_LGBM_HYPERPARAMS["max_depth"] == 3
+    assert BASE_LGBM_HYPERPARAMS["num_leaves"] == 8
+    assert BASE_LGBM_HYPERPARAMS["min_child_samples"] == 80
+    assert BASE_LGBM_HYPERPARAMS["learning_rate"] == 0.03
+    assert BASE_LGBM_HYPERPARAMS["colsample_bytree"] == 0.70
+    assert BASE_LGBM_HYPERPARAMS["subsample"] == 0.80
+    assert BASE_LGBM_HYPERPARAMS["subsample_freq"] == 1
+    assert BASE_LGBM_HYPERPARAMS["reg_alpha"] == 1.0
+    assert BASE_LGBM_HYPERPARAMS["reg_lambda"] == 5.0
+    assert BASE_LGBM_HYPERPARAMS["random_state"] == 42
+    assert BASE_LGBM_HYPERPARAMS["objective"] == "binary"
+    assert BASE_LGBM_HYPERPARAMS["metric"] == "binary_logloss"
+
+    assert TRAINING_POLICY["max_boosting_rounds"] == 300
+    assert TRAINING_POLICY["early_stopping_patience"] == 25
+    assert TRAINING_POLICY["eval_metric"] == "binary_logloss"
+
+    # Schema check
+    expected_11 = (
+        "return_1d", "return_5d", "return_20d", "return_60d", "volatility_20d",
+        "daily_range_pct", "avg_range_20d", "volume_z_score_20d", "drawdown_60d",
+        "return_20d_rel", "vol_ratio_20d"
+    )
+    assert CANDIDATE_A_FEATURES == expected_11
