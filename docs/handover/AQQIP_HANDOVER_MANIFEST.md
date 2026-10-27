@@ -9,9 +9,11 @@
 
 ## 1. Version Control & Working Tree State
 
-* **Git Repository Status:** `C:\dev\AQQIP` is **not a Git repository** (no `.git` directory exists in the repository root or parent directories; `git status` reports `fatal: not a git repository`).
-* **Branch / Commit SHA:** N/A (unversioned local filesystem workspace).
-* **Working-Tree Integrity:** All user files, exploratory scratch scripts, experimental outputs, and research manifests remain intact. No files were discarded, reset, cleaned, or modified.
+* **Git Repository Status:** Initialized and published to GitHub.
+* **Remote URL:** [https://github.com/Prajesh-V/AQQIP](https://github.com/Prajesh-V/AQQIP)
+* **Branch:** `main`
+* **Initial Commit SHA:** `173db71c8880b2c6cc2ed637f1b360442abac3ec`
+* **Working-Tree Integrity:** All user files, exploratory scratch scripts, experimental outputs, and research manifests remain intact. Secrets (.env) remain securely excluded via .gitignore.
 
 ---
 
